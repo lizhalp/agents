@@ -1,0 +1,30 @@
+{$PUBLIC_BASE_URL} {
+  encode gzip zstd
+
+  @admin path /grafana* /temporal*
+  basic_auth @admin {
+    {$ADMIN_USER} {$ADMIN_PASSWORD_HASH}
+  }
+
+  handle /api/* {
+    reverse_proxy api:4000
+  }
+
+  handle /health/* {
+    reverse_proxy api:4000
+  }
+
+  handle /grafana* {
+    uri strip_prefix /grafana
+    reverse_proxy grafana:3000
+  }
+
+  handle /temporal* {
+    uri strip_prefix /temporal
+    reverse_proxy temporal-ui:8080
+  }
+
+  handle {
+    reverse_proxy web:3000
+  }
+}

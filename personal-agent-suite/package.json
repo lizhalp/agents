@@ -1,0 +1,21 @@
+{
+  "name": "personal-agent-suite",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@10.12.1",
+  "scripts": {
+    "build": "turbo build",
+    "dev": "turbo dev",
+    "lint": "turbo lint",
+    "test": "turbo test",
+    "typecheck": "turbo typecheck",
+    "compose:up": "docker compose --env-file .env -f infra/docker/docker-compose.yml up -d --build",
+    "compose:down": "docker compose --env-file .env -f infra/docker/docker-compose.yml down",
+    "compose:logs": "docker compose --env-file .env -f infra/docker/docker-compose.yml logs -f"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.30",
+    "turbo": "^2.0.12",
+    "typescript": "^5.8.3"
+  }
+}

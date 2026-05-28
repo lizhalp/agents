@@ -1,0 +1,89 @@
+name: Personal Agent Suite CI
+
+on:
+  push:
+    paths:
+      - "personal-agent-suite/**"
+      - ".github/workflows/personal-agent-suite-ci.yml"
+  pull_request:
+    paths:
+      - "personal-agent-suite/**"
+      - ".github/workflows/personal-agent-suite-ci.yml"
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: personal-agent-suite
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.12.1
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: personal-agent-suite/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Build workspace
+        run: pnpm build
+
+      - name: Prepare environment
+        run: cp .env.example .env
+
+      - name: Validate Compose config
+        run: docker compose --env-file .env -f infra/docker/docker-compose.yml config >/tmp/personal-agent-suite-compose.yaml
+
+      - name: Build images
+        run: docker compose --env-file .env -f infra/docker/docker-compose.yml build web api orchestrator
+
+      - name: Start stack
+        run: docker compose --env-file .env -f infra/docker/docker-compose.yml up -d
+
+      - name: Wait for API
+        run: |
+          for i in $(seq 1 60); do
+            if curl -fsS http://localhost/health/live >/dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          docker compose --env-file .env -f infra/docker/docker-compose.yml ps
+          docker compose --env-file .env -f infra/docker/docker-compose.yml logs api reverse-proxy web temporal orchestrator
+          exit 1
+
+      - name: Assert readiness and status
+        run: |
+          curl -fsS http://localhost/health/live
+          curl -fsS http://localhost/health/ready
+          curl -fsS http://localhost/api/status
+
+      - name: Assert Temporal smoke path
+        run: curl -fsS -X POST http://localhost/api/smoke/temporal
+
+      - name: Assert frontend renders over HTTPS
+        run: curl -ksSf https://localhost/ | grep -q "Personal Agent Suite"
+
+      - name: Dump service status on failure
+        if: failure()
+        run: |
+          docker compose --env-file .env -f infra/docker/docker-compose.yml ps
+          docker compose --env-file .env -f infra/docker/docker-compose.yml logs --tail=200
+
+      - name: Stop stack
+        if: always()
+        run: docker compose --env-file .env -f infra/docker/docker-compose.yml down -v
