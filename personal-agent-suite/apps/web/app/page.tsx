@@ -1,5 +1,10 @@
+
 import { buildServiceUrls, loadEnv } from "@agent-suite/config";
 import { statusResponseSchema, type StatusResponse } from "@agent-suite/shared-types";
+import { redirect } from "next/navigation";
+
+import { auth } from "../auth";
+import { LogoutButton } from "./components/logout-button";
 
 export const dynamic = "force-dynamic";
 
@@ -8,7 +13,12 @@ async function getStatus(): Promise<StatusResponse | null> {
   const urls = buildServiceUrls(env);
 
   try {
-    const response = await fetch(`${urls.apiBaseUrl}/api/status`, { cache: "no-store" });
+    const response = await fetch(`${urls.apiBaseUrl}/api/status`, {
+      cache: "no-store",
+      headers: {
+        "x-internal-api-secret": env.INTERNAL_API_SECRET
+      }
+    });
     if (!response.ok) {
       return null;
     }
@@ -21,6 +31,11 @@ async function getStatus(): Promise<StatusResponse | null> {
 }
 
 export default async function HomePage() {
+  const session = await auth();
+  if (!session?.user) {
+    redirect("/auth/signin");
+  }
+
   const status = await getStatus();
 
   return (
@@ -50,6 +65,21 @@ export default async function HomePage() {
           Hello world for the self-hosted control plane. This page confirms the frontend, API, reverse proxy, and core runtime
           dependencies are wired together.
         </p>
+        <div
+          style={{
+            marginTop: 18,
+            display: "flex",
+            justifyContent: "space-between",
+            gap: 16,
+            alignItems: "center",
+            flexWrap: "wrap"
+          }}
+        >
+          <p style={{ margin: 0, color: "var(--muted)" }}>
+            Signed in as {session.preferredUsername ?? session.user.email ?? "unknown"} with role {session.role}
+          </p>
+          <LogoutButton />
+        </div>
 
         <div
           style={{

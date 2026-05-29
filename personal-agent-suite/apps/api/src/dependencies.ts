@@ -1,9 +1,9 @@
+import { buildServiceUrls, loadEnv } from "@agent-suite/config";
 import { S3Client, HeadBucketCommand, CreateBucketCommand } from "@aws-sdk/client-s3";
 import { Connection } from "@temporalio/client";
 import { Redis } from "ioredis";
 import { Client as PgClient } from "pg";
 
-import { buildServiceUrls, loadEnv } from "@agent-suite/config";
 import type { HealthDependency } from "./types.js";
 
 const env = loadEnv();
@@ -81,6 +81,11 @@ async function checkMinio(): Promise<HealthDependency> {
   }
 }
 
+/**
+ * Probes every runtime dependency required by the API readiness contract.
+ *
+ * @returns The dependency status list consumed by readiness and status routes.
+ */
 export async function getDependencyStatuses(): Promise<HealthDependency[]> {
   return Promise.all([checkPostgres(), checkRedis(), checkTemporal(), checkMinio()]);
 }

@@ -5,6 +5,12 @@ dist
 *.tsbuildinfo
 .env
 .env.local
+.env.*
+!.env.example
 .DS_Store
 coverage
 tmp
+test-results
+playwright-report
+artifacts
+infra/docker/caddy-local-root.crt

@@ -6,14 +6,17 @@
     "dev": "sh -c 'next dev --hostname 0.0.0.0 --port ${PORT:-3000}'",
     "build": "next build",
     "start": "sh -c 'next start --hostname 0.0.0.0 --port ${PORT:-3000}'",
-    "typecheck": "tsc -p tsconfig.json"
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "echo 'web tests run from root playwright config'"
   },
   "dependencies": {
     "@agent-suite/config": "workspace:*",
     "@agent-suite/shared-types": "workspace:*",
     "next": "^15.3.3",
+    "next-auth": "^5.0.0-beta.29",
     "react": "^19.1.0",
-    "react-dom": "^19.1.0"
+    "react-dom": "^19.1.0",
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "@types/react": "^19.1.6",

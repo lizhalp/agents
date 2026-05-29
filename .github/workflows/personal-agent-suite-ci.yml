@@ -36,14 +36,20 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Lint
+        run: pnpm lint
+
       - name: Typecheck
         run: pnpm typecheck
 
-      - name: Build workspace
-        run: pnpm build
+      - name: Unit tests
+        run: pnpm test
 
       - name: Prepare environment
         run: cp .env.example .env
+
+      - name: Install Playwright browsers
+        run: pnpm exec playwright install --with-deps chromium
 
       - name: Validate Compose config
         run: docker compose --env-file .env -f infra/docker/docker-compose.yml config >/tmp/personal-agent-suite-compose.yaml
@@ -70,10 +76,18 @@ jobs:
         run: |
           curl -fsS http://localhost/health/live
           curl -fsS http://localhost/health/ready
-          curl -fsS http://localhost/api/status
+          curl -fsS -H "x-internal-api-secret: change-me-in-real-environments" http://localhost/api/status
+
+      - name: Assert anonymous API is denied
+        run: |
+          status=$(curl -s -o /dev/null -w "%{http_code}" http://localhost/api/status)
+          test "$status" = "401"
 
       - name: Assert Temporal smoke path
-        run: curl -fsS -X POST http://localhost/api/smoke/temporal
+        run: curl -fsS -X POST -H "x-internal-api-secret: change-me-in-real-environments" http://localhost/api/smoke/temporal
+
+      - name: Run Playwright auth tests
+        run: pnpm test:e2e
 
       - name: Assert frontend renders over HTTPS
         run: curl -ksSf https://localhost/ | grep -q "Personal Agent Suite"

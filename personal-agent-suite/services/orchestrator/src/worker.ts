@@ -1,6 +1,6 @@
+import { buildServiceUrls, loadEnv } from "@agent-suite/config";
 import { NativeConnection, Worker } from "@temporalio/worker";
 
-import { buildServiceUrls, loadEnv } from "@agent-suite/config";
 import * as activities from "./activities.js";
 
 const env = loadEnv();
