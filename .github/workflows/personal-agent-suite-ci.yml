@@ -1,6 +1,6 @@
 name: Personal Agent Suite CI
 
-on:
+"on":
   push:
     paths:
       - "personal-agent-suite/**"
@@ -11,7 +11,8 @@ on:
       - ".github/workflows/personal-agent-suite-ci.yml"
 
 jobs:
-  validate:
+  lint:
+    name: Lint
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -39,11 +40,111 @@ jobs:
       - name: Lint
         run: pnpm lint
 
+  typecheck:
+    name: Typecheck
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: personal-agent-suite
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.12.1
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: personal-agent-suite/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
       - name: Typecheck
         run: pnpm typecheck
 
+  unit-tests:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: personal-agent-suite
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.12.1
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: personal-agent-suite/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
       - name: Unit tests
         run: pnpm test
+
+  compose-config:
+    name: Compose config
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: personal-agent-suite
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Prepare environment
+        run: cp .env.example .env
+
+      - name: Validate Compose config
+        run: docker compose --env-file .env -f infra/docker/docker-compose.yml config >/tmp/personal-agent-suite-compose.yaml
+
+  integration-tests:
+    name: Integration tests
+    runs-on: ubuntu-latest
+    needs:
+      - lint
+      - typecheck
+      - unit-tests
+      - compose-config
+    defaults:
+      run:
+        working-directory: personal-agent-suite
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.12.1
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: personal-agent-suite/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
 
       - name: Prepare environment
         run: cp .env.example .env
@@ -84,13 +185,15 @@ jobs:
           test "$status" = "401"
 
       - name: Assert Temporal smoke path
-        run: curl -fsS -X POST -H "x-internal-api-secret: change-me-in-real-environments" http://localhost/api/smoke/temporal
+        run: |
+          curl -fsS -X POST -H "x-internal-api-secret: change-me-in-real-environments" http://localhost/api/smoke/temporal
 
       - name: Run Playwright auth tests
         run: pnpm test:e2e
 
       - name: Assert frontend renders over HTTPS
-        run: curl -ksSf https://localhost/ | grep -q "Personal Agent Suite"
+        run: |
+          curl -ksSf https://localhost/ | grep -q "Personal Agent Suite"
 
       - name: Dump service status on failure
         if: failure()
