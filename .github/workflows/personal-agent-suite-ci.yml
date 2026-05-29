@@ -72,6 +72,9 @@ jobs:
   unit-tests:
     name: Unit tests
     runs-on: ubuntu-latest
+    needs:
+      - lint
+      - typecheck
     defaults:
       run:
         working-directory: personal-agent-suite
@@ -101,6 +104,9 @@ jobs:
   compose-config:
     name: Compose config
     runs-on: ubuntu-latest
+    needs:
+      - lint
+      - typecheck
     defaults:
       run:
         working-directory: personal-agent-suite
@@ -121,8 +127,6 @@ jobs:
     needs:
       - lint
       - typecheck
-      - unit-tests
-      - compose-config
     defaults:
       run:
         working-directory: personal-agent-suite
@@ -159,7 +163,12 @@ jobs:
         run: docker compose --env-file .env -f infra/docker/docker-compose.yml build web api orchestrator
 
       - name: Start stack
-        run: docker compose --env-file .env -f infra/docker/docker-compose.yml up -d
+        run: |
+          docker compose --env-file .env -f infra/docker/docker-compose.yml up -d || {
+            docker compose --env-file .env -f infra/docker/docker-compose.yml ps -a
+            docker compose --env-file .env -f infra/docker/docker-compose.yml logs --tail=200
+            exit 1
+          }
 
       - name: Wait for API
         run: |

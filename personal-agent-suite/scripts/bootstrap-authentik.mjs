@@ -56,7 +56,7 @@ async function waitForAuthentik() {
   const attempts = 60;
   for (let index = 0; index < attempts; index += 1) {
     try {
-      const response = await fetch(`${env.AUTHENTIK_INTERNAL_SERVICE_URL}/-/health/live/`);
+      const response = await fetch(`${env.AUTHENTIK_INTERNAL_SERVICE_URL}/-/health/ready/`);
       if (response.ok) {
         return;
       }
@@ -123,7 +123,7 @@ async function createApplication(providerPk) {
 }
 
 async function apiFetch(path, init = {}) {
-  const attempts = 15;
+  const attempts = 60;
 
   for (let index = 0; index < attempts; index += 1) {
     const response = await fetch(`${apiBase}${path}`, {
@@ -139,13 +139,17 @@ async function apiFetch(path, init = {}) {
     }
 
     const text = await response.text();
-    if ((response.status === 502 || response.status === 503) && index < attempts - 1) {
+    if (isTransientAuthentikStartupResponse(response.status) && index < attempts - 1) {
       await sleep(2000);
       continue;
     }
 
     throw new HttpError(response.status, text);
   }
+}
+
+function isTransientAuthentikStartupResponse(status) {
+  return status === 502 || status === 503 || status === 504;
 }
 
 function sleep(ms) {
