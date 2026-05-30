@@ -38,6 +38,12 @@ const envSchema = z.object({
   OTEL_EXPORTER_OTLP_ENDPOINT: z.string().url().default("http://tempo:4318")
 });
 
+const insecureSecretDefaults = new Set([
+  "change-me-in-real-environments",
+  "change-me-auth-secret",
+  "change-me-local-password"
+]);
+
 export type RuntimeEnv = z.infer<typeof envSchema>;
 
 /**
@@ -47,7 +53,18 @@ export type RuntimeEnv = z.infer<typeof envSchema>;
  * @returns The validated runtime environment with defaults applied.
  */
 export function loadEnv(input: Record<string, string | undefined> = process.env): RuntimeEnv {
-  return envSchema.parse(input);
+  const env = envSchema.parse(input);
+
+  if (
+    env.NODE_ENV === "production" &&
+    (insecureSecretDefaults.has(env.INTERNAL_API_SECRET) ||
+      insecureSecretDefaults.has(env.AUTH_SECRET) ||
+      insecureSecretDefaults.has(env.AUTH_LOCAL_PASSWORD))
+  ) {
+    throw new Error("Production environment requires explicit secure values for INTERNAL_API_SECRET, AUTH_SECRET, and AUTH_LOCAL_PASSWORD.");
+  }
+
+  return env;
 }
 
 /**

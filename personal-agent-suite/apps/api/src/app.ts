@@ -99,7 +99,7 @@ export function buildApp() {
     }
   });
 
-  registerPlatformRoutes(app as unknown as Parameters<typeof registerPlatformRoutes>[0]);
+  registerPlatformRoutes(app);
 
   return app;
 }

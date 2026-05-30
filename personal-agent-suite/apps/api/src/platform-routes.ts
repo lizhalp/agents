@@ -22,19 +22,17 @@ type BodySchema<T> = {
   safeParse: (body: unknown) => { success: true; data: T } | { success: false; error: { issues: { message: string }[] } };
 };
 
-type RouteRegistrar = Pick<FastifyInstance, "get" | "patch" | "post">;
-
 /**
  * Registers the documented Phase 1 control-plane routes.
  *
  * @param app The Fastify instance receiving route registrations.
  */
-export function registerPlatformRoutes(app: RouteRegistrar) {
+export function registerPlatformRoutes(app: FastifyInstance) {
   app.get("/api/platform", { preHandler: requireInternalSystemAuth }, async () => getPlatformSnapshot());
 
   app.post("/api/goals", { preHandler: requireInternalSystemAuth }, async (request: FastifyRequest, reply: FastifyReply) => {
     const input = parseBody(createGoalSchema, request.body);
-    const ownerId = request.principal?.subjectId ?? "owner";
+    const ownerId = parseOwnerId(request);
     reply.code(201);
     return createGoal(input, ownerId);
   });
@@ -86,4 +84,15 @@ function validationError(error: { issues: { message: string }[] }) {
     statusCode: 400,
     code: "VALIDATION_ERROR"
   });
+}
+
+function parseOwnerId(request: FastifyRequest) {
+  const rawOwnerId = request.headers["x-owner-id"];
+  const ownerId = Array.isArray(rawOwnerId) ? rawOwnerId[0] : rawOwnerId;
+
+  if (typeof ownerId === "string" && ownerId.trim().length > 0) {
+    return ownerId.trim();
+  }
+
+  return "owner";
 }

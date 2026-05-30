@@ -10,14 +10,7 @@ export function LogoutButton() {
     >
       <button
         type="submit"
-        style={{
-          border: "1px solid var(--panel-border)",
-          borderRadius: 999,
-          padding: "10px 14px",
-          background: "transparent",
-          color: "var(--text)",
-          cursor: "pointer"
-        }}
+        className="rounded-full border border-white/20 bg-transparent px-3.5 py-2.5 text-sm text-[#f2ebdf] transition hover:bg-white/[0.05] focus:outline-none focus:ring-4 focus:ring-accent/10"
       >
         Sign out
       </button>
