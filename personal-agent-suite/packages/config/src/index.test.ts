@@ -19,6 +19,9 @@ describe("loadEnv", () => {
       PUBLIC_BASE_URL: "agents.example.com",
       API_PORT: "4100",
       POSTGRES_PORT: "6543",
+      INTERNAL_API_SECRET: "prod-internal-secret-value",
+      AUTH_SECRET: "prod-auth-secret-value",
+      AUTH_LOCAL_PASSWORD: "prod-owner-password",
       AUTH_GOOGLE_ID: "google-client-id",
       AUTH_GOOGLE_SECRET: "google-client-secret"
     });
@@ -28,6 +31,14 @@ describe("loadEnv", () => {
     expect(env.API_PORT).toBe(4100);
     expect(env.POSTGRES_PORT).toBe(6543);
     expect(env.AUTH_GOOGLE_ID).toBe("google-client-id");
+  });
+
+  it("rejects insecure secret defaults in production", () => {
+    expect(() =>
+      loadEnv({
+        NODE_ENV: "production"
+      })
+    ).toThrow("Production environment requires explicit secure values");
   });
 });
 

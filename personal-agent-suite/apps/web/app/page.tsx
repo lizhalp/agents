@@ -11,6 +11,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { auth } from "../auth";
+import { FormSubmitButton } from "./components/form-submit-button";
 import { LogoutButton } from "./components/logout-button";
 
 import type { Agent, Goal, PlatformSnapshot, Run } from "@agent-suite/shared-types";
@@ -18,16 +19,19 @@ import type { ReactNode } from "react";
 
 export const dynamic = "force-dynamic";
 
-async function getPlatformSnapshot(): Promise<PlatformSnapshot> {
+type FormErrorTarget = "goal" | "run" | "approval" | "memory" | "knowledge";
+type DashboardFormError = { target: FormErrorTarget; message: string };
+
+async function getPlatformSnapshot(ownerId: string): Promise<{ apiUnavailable: boolean; snapshot: PlatformSnapshot }> {
   try {
-    const response = await apiFetch("/api/platform", { method: "GET" });
+    const response = await apiFetch("/api/platform", { method: "GET" }, ownerId);
     if (!response.ok) {
-      return emptySnapshot();
+      return { snapshot: emptySnapshot(), apiUnavailable: true };
     }
 
-    return platformSnapshotSchema.parse(await response.json());
+    return { snapshot: platformSnapshotSchema.parse(await response.json()), apiUnavailable: false };
   } catch {
-    return emptySnapshot();
+    return { snapshot: emptySnapshot(), apiUnavailable: true };
   }
 }
 
@@ -43,15 +47,8 @@ function emptySnapshot(): PlatformSnapshot {
   };
 }
 
-function unavailableNotice(snapshot: PlatformSnapshot) {
-  if (
-    snapshot.goals.length === 0 &&
-    snapshot.agents.length === 0 &&
-    snapshot.runs.length === 0 &&
-    snapshot.approvals.length === 0 &&
-    snapshot.memories.length === 0 &&
-    snapshot.knowledgeSources.length === 0
-  ) {
+function unavailableNotice(apiUnavailable: boolean) {
+  if (apiUnavailable) {
     return {
       title: "Control-plane API unavailable",
       body: "Start the API and Postgres services to load the database-backed platform state."
@@ -61,17 +58,23 @@ function unavailableNotice(snapshot: PlatformSnapshot) {
   return null;
 }
 
-export default async function HomePage() {
+export default async function HomePage({
+  searchParams
+}: {
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const session = await auth();
   if (!session?.user) {
     redirect("/auth/signin");
   }
 
-  const snapshot = await getPlatformSnapshot();
+  const ownerId = ownerIdentifier(session);
+  const { snapshot, apiUnavailable } = await getPlatformSnapshot(ownerId);
   const activeGoals = snapshot.goals.filter((goal) => goal.status === "active");
   const pendingApprovals = snapshot.approvals.filter((approval) => approval.status === "pending");
   const latestRun = snapshot.runs[0];
-  const notice = unavailableNotice(snapshot);
+  const notice = unavailableNotice(apiUnavailable);
+  const formError = parseFormError(await searchParams);
 
   return (
     <main className="min-h-screen px-5 py-6 text-[#f2ebdf] lg:px-8">
@@ -112,7 +115,7 @@ export default async function HomePage() {
         <section className="grid gap-6 xl:grid-cols-[minmax(0,1.25fr)_minmax(360px,0.75fr)]">
           <div className="grid gap-6">
             <Panel title="Goals" action={<span>{snapshot.goals.length} total</span>}>
-              <CreateGoalForm />
+              <CreateGoalForm errorMessage={formError?.target === "goal" ? formError.message : null} />
               <div className="mt-5 grid gap-3">
                 {snapshot.goals.map((goal) => (
                   <GoalCard key={goal.id} goal={goal} />
@@ -121,7 +124,11 @@ export default async function HomePage() {
             </Panel>
 
             <Panel title="Run Timeline" action={latestRun ? <span>Latest: {latestRun.status}</span> : null}>
-              <CreateRunForm agents={snapshot.agents} goals={snapshot.goals} />
+              <CreateRunForm
+                agents={snapshot.agents}
+                errorMessage={formError?.target === "run" ? formError.message : null}
+                goals={snapshot.goals}
+              />
               <div className="mt-5 grid gap-3">
                 {snapshot.runs.map((run) => (
                   <RunCard key={run.id} agents={snapshot.agents} goals={snapshot.goals} run={run} />
@@ -153,6 +160,11 @@ export default async function HomePage() {
             </Panel>
 
             <Panel title="Approval Queue" action={<span>{pendingApprovals.length} pending</span>}>
+              {formError?.target === "approval" ? (
+                <p id="approval-form-error" role="alert" className="mb-3 rounded-xl border border-[#ff76765f] bg-[#ff76761a] p-2 text-sm text-[#ffd1d1]">
+                  {formError.message}
+                </p>
+              ) : null}
               <div className="grid gap-3">
                 {snapshot.approvals.map((approval) => (
                   <article key={approval.id} className="rounded-2xl border border-white/10 bg-[#09131f]/70 p-4">
@@ -187,7 +199,10 @@ export default async function HomePage() {
             </Panel>
 
             <Panel title="Memory Explorer" action={<span>{snapshot.memories.length} entries</span>}>
-              <CreateMemoryForm goals={snapshot.goals} />
+              <CreateMemoryForm
+                errorMessage={formError?.target === "memory" ? formError.message : null}
+                goals={snapshot.goals}
+              />
               <div className="mt-5 grid gap-3">
                 {snapshot.memories.map((memory) => (
                   <article key={memory.id} className="rounded-2xl border border-white/10 bg-[#09131f]/70 p-4">
@@ -202,7 +217,7 @@ export default async function HomePage() {
             </Panel>
 
             <Panel title="Knowledge Sources" action={<span>{snapshot.knowledgeSources.length} sources</span>}>
-              <CreateKnowledgeSourceForm />
+              <CreateKnowledgeSourceForm errorMessage={formError?.target === "knowledge" ? formError.message : null} />
               <div className="mt-5 grid gap-3">
                 {snapshot.knowledgeSources.map((source) => (
                   <article key={source.id} className="rounded-2xl border border-white/10 bg-[#09131f]/70 p-4">
@@ -226,67 +241,92 @@ export default async function HomePage() {
 
 async function createGoalAction(formData: FormData) {
   "use server";
-  await requireOwner();
-  const input = createGoalSchema.parse({
-    title: formData.get("title"),
-    description: formData.get("description"),
-    successCriteria: formData.get("successCriteria"),
-    constraints: formData.get("constraints") ?? "",
-    horizon: formData.get("horizon") ?? "long_horizon",
-    targetDate: emptyToUndefined(formData.get("targetDate"))
-  });
-  await apiJson("/api/goals", "POST", input);
-  revalidatePath("/");
+  const ownerId = await requireOwner();
+
+  try {
+    const input = createGoalSchema.parse({
+      title: formData.get("title"),
+      description: formData.get("description"),
+      successCriteria: formData.get("successCriteria"),
+      constraints: formData.get("constraints") ?? "",
+      horizon: formData.get("horizon") ?? "long_horizon",
+      targetDate: emptyToUndefined(formData.get("targetDate"))
+    });
+    await apiJson("/api/goals", "POST", input, ownerId);
+    revalidatePath("/");
+  } catch (error) {
+    redirect(formErrorUrl("goal", error));
+  }
 }
 
 async function createRunAction(formData: FormData) {
   "use server";
-  await requireOwner();
-  const input = createRunSchema.parse({
-    goalId: formData.get("goalId"),
-    agentId: formData.get("agentId"),
-    objective: formData.get("objective")
-  });
-  await apiJson("/api/runs", "POST", input);
-  revalidatePath("/");
+  const ownerId = await requireOwner();
+
+  try {
+    const input = createRunSchema.parse({
+      goalId: formData.get("goalId"),
+      agentId: formData.get("agentId"),
+      objective: formData.get("objective")
+    });
+    await apiJson("/api/runs", "POST", input, ownerId);
+    revalidatePath("/");
+  } catch (error) {
+    redirect(formErrorUrl("run", error));
+  }
 }
 
 async function resolveApprovalAction(formData: FormData) {
   "use server";
-  await requireOwner();
-  const approvalId = String(formData.get("approvalId") ?? "");
-  const input = resolveApprovalSchema.parse({
-    status: formData.get("status"),
-    resolvedBy: "owner"
-  });
-  await apiJson(`/api/approvals/${approvalId}`, "PATCH", input);
-  revalidatePath("/");
+  const ownerId = await requireOwner();
+
+  try {
+    const approvalId = String(formData.get("approvalId") ?? "");
+    const input = resolveApprovalSchema.parse({
+      status: formData.get("status"),
+      resolvedBy: ownerId
+    });
+    await apiJson(`/api/approvals/${approvalId}`, "PATCH", input, ownerId);
+    revalidatePath("/");
+  } catch (error) {
+    redirect(formErrorUrl("approval", error));
+  }
 }
 
 async function createMemoryAction(formData: FormData) {
   "use server";
-  await requireOwner();
-  const input = createMemorySchema.parse({
-    goalId: emptyToUndefined(formData.get("goalId")),
-    tier: formData.get("tier") ?? "working",
-    title: formData.get("title"),
-    content: formData.get("content"),
-    importance: emptyToUndefined(formData.get("importance")) ?? "3"
-  });
-  await apiJson("/api/memories", "POST", input);
-  revalidatePath("/");
+  const ownerId = await requireOwner();
+
+  try {
+    const input = createMemorySchema.parse({
+      goalId: emptyToUndefined(formData.get("goalId")),
+      tier: formData.get("tier") ?? "working",
+      title: formData.get("title"),
+      content: formData.get("content"),
+      importance: emptyToUndefined(formData.get("importance")) ?? "3"
+    });
+    await apiJson("/api/memories", "POST", input, ownerId);
+    revalidatePath("/");
+  } catch (error) {
+    redirect(formErrorUrl("memory", error));
+  }
 }
 
 async function createKnowledgeSourceAction(formData: FormData) {
   "use server";
-  await requireOwner();
-  const input = createKnowledgeSourceSchema.parse({
+  const ownerId = await requireOwner();
+
+  try {
+    const input = createKnowledgeSourceSchema.parse({
     name: formData.get("name"),
     sourceType: formData.get("sourceType"),
     uri: formData.get("uri")
-  });
-  await apiJson("/api/knowledge-sources", "POST", input);
-  revalidatePath("/");
+    });
+    await apiJson("/api/knowledge-sources", "POST", input, ownerId);
+    revalidatePath("/");
+  } catch (error) {
+    redirect(formErrorUrl("knowledge", error));
+  }
 }
 
 async function requireOwner() {
@@ -294,27 +334,38 @@ async function requireOwner() {
   if (!session?.user || session.role !== "owner") {
     redirect("/auth/signin");
   }
+
+  return ownerIdentifier(session);
 }
 
-async function apiJson(path: string, method: "POST" | "PATCH", body: unknown) {
-  const response = await apiFetch(path, {
+async function apiJson(path: string, method: "POST" | "PATCH", body: unknown, ownerId: string) {
+  const response = await apiFetch(
+    path,
+    {
     method,
     body: JSON.stringify(body),
     headers: {
       "Content-Type": "application/json"
     }
-  });
+    },
+    ownerId
+  );
 
   if (!response.ok) {
-    throw new Error(`API request failed: ${response.status}`);
+    const payload = await response.json().catch(() => null);
+    const message = payload && typeof payload === "object" && "message" in payload ? String(payload.message) : null;
+    throw new Error(message ?? `API request failed: ${response.status}`);
   }
 }
 
-async function apiFetch(path: string, init: RequestInit) {
+async function apiFetch(path: string, init: RequestInit, ownerId?: string) {
   const env = loadEnv();
   const urls = buildServiceUrls(env);
   const headers = new Headers(init.headers);
   headers.set("x-internal-api-secret", env.INTERNAL_API_SECRET);
+  if (ownerId) {
+    headers.set("x-owner-id", ownerId);
+  }
 
   return fetch(`${urls.apiBaseUrl}${path}`, {
     ...init,
@@ -323,90 +374,179 @@ async function apiFetch(path: string, init: RequestInit) {
   });
 }
 
-function CreateGoalForm() {
+function CreateGoalForm({ errorMessage }: { errorMessage: string | null }) {
+  const errorId = "goal-form-error";
+
   return (
     <form action={createGoalAction} className="grid gap-3 rounded-2xl border border-white/10 bg-[#09131f]/70 p-4">
+      {errorMessage ? (
+        <p id={errorId} role="alert" className="rounded-xl border border-[#ff76765f] bg-[#ff76761a] p-2 text-sm text-[#ffd1d1]">
+          {errorMessage}
+        </p>
+      ) : null}
       <div className="grid gap-3 md:grid-cols-2">
-        <Field name="title" placeholder="Launch reliable Phase 1" />
-        <select name="horizon" className="field-control">
-          <option value="long_horizon">Long horizon</option>
-          <option value="quarterly">Quarterly</option>
-          <option value="monthly">Monthly</option>
-          <option value="weekly">Weekly</option>
-          <option value="daily">Daily</option>
-        </select>
+        <Field
+          id="goal-title-field"
+          errorId={errorMessage ? errorId : undefined}
+          label="Goal title"
+          name="title"
+          placeholder="Launch reliable Phase 1"
+        />
+        <div className="grid gap-2">
+          <FieldLabel htmlFor="goal-horizon">Horizon</FieldLabel>
+          <select id="goal-horizon" name="horizon" className="field-control" aria-describedby={errorMessage ? errorId : undefined}>
+            <option value="long_horizon">Long horizon</option>
+            <option value="quarterly">Quarterly</option>
+            <option value="monthly">Monthly</option>
+            <option value="weekly">Weekly</option>
+            <option value="daily">Daily</option>
+          </select>
+        </div>
       </div>
-      <Textarea name="description" placeholder="What objective should the platform pursue?" />
-      <Textarea name="successCriteria" placeholder="What does success look like?" />
+      <Textarea
+        id="goal-description-field"
+        errorId={errorMessage ? errorId : undefined}
+        label="Description"
+        name="description"
+        placeholder="What objective should the platform pursue?"
+      />
+      <Textarea
+        id="goal-success-criteria-field"
+        errorId={errorMessage ? errorId : undefined}
+        label="Success criteria"
+        name="successCriteria"
+        placeholder="What does success look like?"
+      />
       <div className="grid gap-3 md:grid-cols-[1fr_180px]">
-        <Field name="constraints" placeholder="Constraints, policies, or boundaries" />
-        <Field name="targetDate" type="date" />
+        <Field
+          id="goal-constraints-field"
+          errorId={errorMessage ? errorId : undefined}
+          label="Constraints"
+          name="constraints"
+          placeholder="Constraints, policies, or boundaries"
+        />
+        <Field id="goal-target-date-field" errorId={errorMessage ? errorId : undefined} label="Target date" name="targetDate" type="date" />
       </div>
-      <Submit>Create goal</Submit>
+      <FormSubmitButton pendingLabel="Creating goal...">Create goal</FormSubmitButton>
     </form>
   );
 }
 
-function CreateRunForm({ agents, goals }: { agents: Agent[]; goals: Goal[] }) {
+function CreateRunForm({ agents, errorMessage, goals }: { agents: Agent[]; errorMessage: string | null; goals: Goal[] }) {
+  const errorId = "run-form-error";
+
   return (
     <form action={createRunAction} className="grid gap-3 rounded-2xl border border-white/10 bg-[#09131f]/70 p-4">
+      {errorMessage ? (
+        <p id={errorId} role="alert" className="rounded-xl border border-[#ff76765f] bg-[#ff76761a] p-2 text-sm text-[#ffd1d1]">
+          {errorMessage}
+        </p>
+      ) : null}
       <div className="grid gap-3 md:grid-cols-2">
-        <select name="goalId" className="field-control" required>
-          {goals.map((goal) => (
-            <option key={goal.id} value={goal.id}>
-              {goal.title}
-            </option>
-          ))}
-        </select>
-        <select name="agentId" className="field-control" required>
-          {agents.map((agent) => (
-            <option key={agent.id} value={agent.id}>
-              {agent.name}
-            </option>
-          ))}
-        </select>
+        <div className="grid gap-2">
+          <FieldLabel htmlFor="run-goal">Goal</FieldLabel>
+          <select id="run-goal" name="goalId" className="field-control" required aria-describedby={errorMessage ? errorId : undefined}>
+            {goals.map((goal) => (
+              <option key={goal.id} value={goal.id}>
+                {goal.title}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="grid gap-2">
+          <FieldLabel htmlFor="run-agent">Agent</FieldLabel>
+          <select id="run-agent" name="agentId" className="field-control" required aria-describedby={errorMessage ? errorId : undefined}>
+            {agents.map((agent) => (
+              <option key={agent.id} value={agent.id}>
+                {agent.name}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
-      <Textarea name="objective" placeholder="What should the selected agent run now?" />
-      <Submit>Request manual run</Submit>
+      <Textarea
+        id="run-objective-field"
+        errorId={errorMessage ? errorId : undefined}
+        label="Objective"
+        name="objective"
+        placeholder="What should the selected agent run now?"
+      />
+      <FormSubmitButton pendingLabel="Submitting run...">Request manual run</FormSubmitButton>
     </form>
   );
 }
 
-function CreateMemoryForm({ goals }: { goals: Goal[] }) {
+function CreateMemoryForm({ errorMessage, goals }: { errorMessage: string | null; goals: Goal[] }) {
+  const errorId = "memory-form-error";
+
   return (
     <form action={createMemoryAction} className="grid gap-3 rounded-2xl border border-white/10 bg-[#09131f]/70 p-4">
-      <Field name="title" placeholder="Memory title" />
-      <Textarea name="content" placeholder="Fact, preference, observation, or completed-run memory" />
+      {errorMessage ? (
+        <p id={errorId} role="alert" className="rounded-xl border border-[#ff76765f] bg-[#ff76761a] p-2 text-sm text-[#ffd1d1]">
+          {errorMessage}
+        </p>
+      ) : null}
+      <Field id="memory-title-field" errorId={errorMessage ? errorId : undefined} label="Memory title" name="title" placeholder="Memory title" />
+      <Textarea
+        id="memory-content-field"
+        errorId={errorMessage ? errorId : undefined}
+        label="Memory content"
+        name="content"
+        placeholder="Fact, preference, observation, or completed-run memory"
+      />
       <div className="grid gap-3 md:grid-cols-3">
-        <select name="goalId" className="field-control">
-          <option value="">No goal</option>
-          {goals.map((goal) => (
-            <option key={goal.id} value={goal.id}>
-              {goal.title}
-            </option>
-          ))}
-        </select>
-        <select name="tier" className="field-control">
-          <option value="working">Working</option>
-          <option value="episodic">Episodic</option>
-          <option value="semantic">Semantic</option>
-        </select>
-        <Field defaultValue="3" max="5" min="1" name="importance" type="number" placeholder="3" />
+        <div className="grid gap-2">
+          <FieldLabel htmlFor="memory-goal">Goal</FieldLabel>
+          <select id="memory-goal" name="goalId" className="field-control" aria-describedby={errorMessage ? errorId : undefined}>
+            <option value="">No goal</option>
+            {goals.map((goal) => (
+              <option key={goal.id} value={goal.id}>
+                {goal.title}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="grid gap-2">
+          <FieldLabel htmlFor="memory-tier">Tier</FieldLabel>
+          <select id="memory-tier" name="tier" className="field-control" aria-describedby={errorMessage ? errorId : undefined}>
+            <option value="working">Working</option>
+            <option value="episodic">Episodic</option>
+            <option value="semantic">Semantic</option>
+          </select>
+        </div>
+        <Field
+          id="memory-importance-field"
+          defaultValue="3"
+          errorId={errorMessage ? errorId : undefined}
+          label="Importance (1-5)"
+          max="5"
+          min="1"
+          name="importance"
+          type="number"
+          placeholder="3"
+        />
       </div>
-      <Submit>Add memory</Submit>
+      <FormSubmitButton pendingLabel="Saving memory...">Add memory</FormSubmitButton>
     </form>
   );
 }
 
-function CreateKnowledgeSourceForm() {
+function CreateKnowledgeSourceForm({ errorMessage }: { errorMessage: string | null }) {
+  const errorId = "knowledge-form-error";
+
   return (
     <form action={createKnowledgeSourceAction} className="grid gap-3 rounded-2xl border border-white/10 bg-[#09131f]/70 p-4">
-      <Field name="name" placeholder="Architecture docs" />
+      {errorMessage ? (
+        <p id={errorId} role="alert" className="rounded-xl border border-[#ff76765f] bg-[#ff76761a] p-2 text-sm text-[#ffd1d1]">
+          {errorMessage}
+        </p>
+      ) : null}
+      <Field id="knowledge-name-field" errorId={errorMessage ? errorId : undefined} label="Source name" name="name" placeholder="Architecture docs" />
       <div className="grid gap-3 md:grid-cols-[150px_1fr]">
-        <Field name="sourceType" placeholder="repo" />
-        <Field name="uri" placeholder="docs/architecture.md" />
+        <Field id="knowledge-source-type-field" errorId={errorMessage ? errorId : undefined} label="Source type" name="sourceType" placeholder="repo" />
+        <Field id="knowledge-uri-field" errorId={errorMessage ? errorId : undefined} label="URI" name="uri" placeholder="docs/architecture.md" />
       </div>
-      <Submit>Register source</Submit>
+      <FormSubmitButton pendingLabel="Registering source...">Register source</FormSubmitButton>
     </form>
   );
 }
@@ -473,6 +613,9 @@ function Panel({ action, children, title }: { action?: ReactNode; children: Reac
 
 function Field({
   defaultValue,
+  errorId,
+  id,
+  label,
   max,
   min,
   name,
@@ -480,31 +623,64 @@ function Field({
   type = "text"
 }: {
   defaultValue?: string;
+  errorId?: string;
+  id?: string;
+  label: string;
   max?: string;
   min?: string;
   name: string;
   placeholder?: string;
   type?: string;
 }) {
+  const inputId = id ?? `${name}-field`;
+
   return (
-    <input
-      className="field-control"
-      defaultValue={defaultValue}
-      max={max}
-      min={min}
-      name={name}
-      placeholder={placeholder}
-      type={type}
-    />
+    <div className="grid gap-2">
+      <FieldLabel htmlFor={inputId}>{label}</FieldLabel>
+      <input
+        id={inputId}
+        aria-describedby={errorId}
+        className="field-control"
+        defaultValue={defaultValue}
+        max={max}
+        min={min}
+        name={name}
+        placeholder={placeholder}
+        type={type}
+      />
+    </div>
   );
 }
 
-function Textarea({ name, placeholder }: { name: string; placeholder: string }) {
-  return <textarea className="field-control min-h-24 resize-y" name={name} placeholder={placeholder} />;
+function Textarea({
+  errorId,
+  id,
+  label,
+  name,
+  placeholder
+}: {
+  errorId?: string;
+  id?: string;
+  label: string;
+  name: string;
+  placeholder: string;
+}) {
+  const inputId = id ?? `${name}-field`;
+
+  return (
+    <div className="grid gap-2">
+      <FieldLabel htmlFor={inputId}>{label}</FieldLabel>
+      <textarea id={inputId} aria-describedby={errorId} className="field-control min-h-24 resize-y" name={name} placeholder={placeholder} />
+    </div>
+  );
 }
 
-function Submit({ children }: { children: ReactNode }) {
-  return <button className="rounded-xl bg-accent px-4 py-2.5 text-sm font-bold text-ink">{children}</button>;
+function FieldLabel({ children, htmlFor }: { children: ReactNode; htmlFor: string }) {
+  return (
+    <label className="text-xs uppercase tracking-[0.14em] text-[#cad6de]" htmlFor={htmlFor}>
+      {children}
+    </label>
+  );
 }
 
 function StatusPill({ value }: { value: string }) {
@@ -530,4 +706,58 @@ function emptyToUndefined(value: FormDataEntryValue | null) {
   }
 
   return value;
+}
+
+function ownerIdentifier(session: { preferredUsername?: string | null; user?: { email?: string | null } }) {
+  const preferred = session.preferredUsername?.trim();
+  if (preferred) {
+    return preferred;
+  }
+
+  const email = session.user?.email?.trim();
+  if (email) {
+    return email;
+  }
+
+  return "owner";
+}
+
+function parseFormError(searchParams?: Record<string, string | string[] | undefined>): DashboardFormError | null {
+  const target = firstParam(searchParams, "formError");
+  const message = firstParam(searchParams, "message");
+
+  if (!target || !message) {
+    return null;
+  }
+
+  if (target !== "goal" && target !== "run" && target !== "approval" && target !== "memory" && target !== "knowledge") {
+    return null;
+  }
+
+  return {
+    target,
+    message
+  };
+}
+
+function formErrorUrl(target: FormErrorTarget, error: unknown) {
+  const params = new URLSearchParams({
+    formError: target,
+    message: dashboardErrorMessage(error)
+  });
+
+  return `/?${params.toString()}`;
+}
+
+function dashboardErrorMessage(error: unknown) {
+  if (error instanceof Error && error.message.trim().length > 0) {
+    return error.message;
+  }
+
+  return "Request failed. Please check your input and try again.";
+}
+
+function firstParam(searchParams: Record<string, string | string[] | undefined> | undefined, key: string) {
+  const value = searchParams?.[key];
+  return Array.isArray(value) ? value[0] : value;
 }

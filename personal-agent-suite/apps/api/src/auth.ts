@@ -1,5 +1,6 @@
 
 import { loadEnv } from "@agent-suite/config";
+import { timingSafeEqual } from "node:crypto";
 
 import type { AuthenticatedPrincipal } from "@agent-suite/shared-types";
 import type { FastifyReply, FastifyRequest } from "fastify";
@@ -22,7 +23,7 @@ export async function requireInternalSystemAuth(request: FastifyRequest, reply: 
   const providedSecret = request.headers["x-internal-api-secret"];
   const secret = Array.isArray(providedSecret) ? providedSecret[0] : providedSecret;
 
-  if (!secret || secret !== env.INTERNAL_API_SECRET) {
+  if (!secret || !secretsMatch(env.INTERNAL_API_SECRET, secret)) {
     reply.code(401);
     return reply.send({
       error: "unauthorized",
@@ -36,4 +37,15 @@ export async function requireInternalSystemAuth(request: FastifyRequest, reply: 
     roles: ["service"],
     capabilities: ["platform.read", "platform.admin", "workflow.invoke", "internal.system"]
   };
+}
+
+function secretsMatch(expectedSecret: string, providedSecret: string) {
+  const expected = Buffer.from(expectedSecret);
+  const provided = Buffer.from(providedSecret);
+
+  if (expected.length !== provided.length) {
+    return false;
+  }
+
+  return timingSafeEqual(expected, provided);
 }

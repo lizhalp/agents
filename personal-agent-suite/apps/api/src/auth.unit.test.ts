@@ -21,6 +21,18 @@ describe("requireInternalSystemAuth", () => {
     });
   });
 
+  it("rejects requests with non-matching secret lengths", async () => {
+    const reply = createReply();
+
+    await requireInternalSystemAuth(createRequest("short"), reply);
+
+    expect(reply.statusCode).toBe(401);
+    expect(reply.payload).toEqual({
+      error: "unauthorized",
+      message: "missing or invalid internal api secret"
+    });
+  });
+
   it("attaches a service principal when the internal API secret matches", async () => {
     const request = createRequest("unit-secret");
     const reply = createReply();

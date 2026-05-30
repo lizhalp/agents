@@ -121,6 +121,27 @@ describe("api integration", () => {
     expect(snapshot.json().goals.some((goal: { title: string }) => goal.title === "Ship Phase 1")).toBe(true);
   });
 
+  it("records goal ownership from the forwarded owner header", async () => {
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/goals",
+      headers: {
+        "x-internal-api-secret": "test-secret",
+        "x-owner-id": "owner@example.com"
+      },
+      payload: {
+        title: "Verify owner attribution",
+        description: "Ensure ownership tracks the signed-in owner context.",
+        successCriteria: "Created goal row records the owner identity from the request header.",
+        constraints: "",
+        horizon: "long_horizon"
+      }
+    });
+
+    expect(response.statusCode).toBe(201);
+    expect(response.json().ownerId).toBe("owner@example.com");
+  });
+
   it("rejects invalid platform payloads", async () => {
     const response = await app.inject({
       method: "POST",

@@ -10,15 +10,14 @@
 
 1. Copy `.env.example` to `.env`.
 2. Set `PUBLIC_BASE_URL` to your domain name.
-3. Set `ADMIN_PASSWORD_HASH` to a Caddy-compatible bcrypt hash for admin routes.
-4. Keep bcrypt hashes escaped as `$$` inside `.env`, because Docker Compose treats single `$` as interpolation.
-5. Set `AUTH_SECRET`, `AUTH_LOCAL_USERNAME`, `AUTH_LOCAL_EMAIL`, and `AUTH_LOCAL_PASSWORD`.
-6. Add OAuth client IDs and secrets only for providers you want to enable. OAuth users must match `AUTH_OWNER_EMAILS` or `AUTH_OWNER_USERNAMES`.
-7. Run `pnpm compose:up`.
+3. Set `INTERNAL_API_SECRET`, `AUTH_SECRET`, and `AUTH_LOCAL_PASSWORD` to explicit strong secrets.
+4. Set `AUTH_LOCAL_USERNAME` and `AUTH_LOCAL_EMAIL` for the local owner account.
+5. Add OAuth client IDs and secrets only for providers you want to enable. OAuth users must match `AUTH_OWNER_EMAILS` or `AUTH_OWNER_USERNAMES`.
+6. Run `pnpm compose:up`.
 
 ## Stack entrypoints
 
-- `/` -> web hello-world dashboard
+- `/` -> personal-agent control-plane dashboard
 - `/api/status` -> API status payload
 - `/health/live` -> API liveness
 - `/health/ready` -> API readiness
