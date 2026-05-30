@@ -84,6 +84,11 @@
     @apply hover:border-[#a3b5c757] hover:bg-white/[0.05] focus:outline-none focus:ring-4 focus:ring-accent/10;
   }
 
+  .field-control {
+    @apply w-full rounded-xl border border-white/10 bg-[#08111c]/80 px-3.5 py-2.5 text-sm text-[#f2ebdf] outline-none transition;
+    @apply placeholder:text-white/35 focus:border-accent/60 focus:bg-[#0d1928] focus:ring-4 focus:ring-accent/10;
+  }
+
   .auth-mobile-hero {
     @apply hidden;
   }

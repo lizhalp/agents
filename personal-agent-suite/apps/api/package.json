@@ -8,7 +8,9 @@
     "build": "tsc -p tsconfig.json",
     "start": "node dist/server.js",
     "typecheck": "tsc -p tsconfig.json",
-    "test": "vitest run"
+    "test": "pnpm test:unit",
+    "test:unit": "vitest run --config ../../vitest.config.ts --exclude '**/*.integration.test.ts'",
+    "test:integration": "vitest run --config ../../vitest.config.ts src/*.integration.test.ts"
   },
   "dependencies": {
     "@agent-suite/config": "workspace:*",

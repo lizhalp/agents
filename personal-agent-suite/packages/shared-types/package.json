@@ -8,7 +8,8 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json",
-    "test": "echo 'no shared type tests yet'"
+    "test": "pnpm test:unit",
+    "test:unit": "echo 'no shared type tests yet'"
   },
   "dependencies": {
     "zod": "^3.24.4"

@@ -6,6 +6,7 @@ import pino from "pino";
 
 import { requireInternalSystemAuth } from "./auth.js";
 import { getDependencyStatuses } from "./dependencies.js";
+import { registerPlatformRoutes } from "./platform-routes.js";
 import { runTemporalSmokeCheck } from "./smoke.js";
 
 import type { ServiceStatus } from "./types.js";
@@ -32,6 +33,14 @@ export function buildApp() {
   app.addHook("onRequest", async (request, reply) => {
     reply.header("x-correlation-id", request.id);
     request.log.info({ correlationId: request.id }, "request_started");
+  });
+
+  app.setErrorHandler((error: unknown, _request, reply) => {
+    const statusCode = getErrorStatusCode(error);
+    reply.code(statusCode).send({
+      error: statusCode >= 500 ? "internal_server_error" : "bad_request",
+      message: error instanceof Error ? error.message : "Unknown error"
+    });
   });
 
   app.get("/health/live", async () => ({
@@ -90,5 +99,15 @@ export function buildApp() {
     }
   });
 
+  registerPlatformRoutes(app as unknown as Parameters<typeof registerPlatformRoutes>[0]);
+
   return app;
+}
+
+function getErrorStatusCode(error: unknown) {
+  if (error && typeof error === "object" && "statusCode" in error && typeof error.statusCode === "number") {
+    return error.statusCode;
+  }
+
+  return 500;
 }

@@ -1,5 +1,17 @@
 {
   "$schema": "https://turbo.build/schema.json",
+  "globalEnv": [
+    "AUTH_LOCAL_EMAIL",
+    "AUTH_LOCAL_NAME",
+    "AUTH_LOCAL_PASSWORD",
+    "AUTH_LOCAL_USERNAME",
+    "INTERNAL_API_SECRET",
+    "POSTGRES_DB",
+    "POSTGRES_HOST",
+    "POSTGRES_PASSWORD",
+    "POSTGRES_PORT",
+    "POSTGRES_USER"
+  ],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
@@ -12,8 +24,11 @@
     "lint": {
       "dependsOn": ["^lint"]
     },
-    "test": {
-      "dependsOn": ["^test"]
+    "test:unit": {
+      "dependsOn": ["^test:unit"]
+    },
+    "test:integration": {
+      "cache": false
     },
     "typecheck": {
       "dependsOn": ["^typecheck"]
