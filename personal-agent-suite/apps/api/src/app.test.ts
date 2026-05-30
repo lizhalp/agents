@@ -16,12 +16,10 @@ vi.mock("./smoke.js", () => ({
 describe("api auth", () => {
   beforeAll(() => {
     process.env.INTERNAL_API_SECRET = "test-secret";
-    process.env.AUTHENTIK_BOOTSTRAP_EMAIL = "akadmin@example.com";
   });
 
   afterAll(() => {
     delete process.env.INTERNAL_API_SECRET;
-    delete process.env.AUTHENTIK_BOOTSTRAP_EMAIL;
   });
 
   it("rejects anonymous access to /api/status", async () => {

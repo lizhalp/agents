@@ -22,7 +22,7 @@ The architecture is intentionally abstract. It separates:
 - Database: Postgres with pgvector
 - Cache and queues: Redis
 - Search and retrieval: Postgres + pgvector first, add OpenSearch only if needed
-- Auth: NextAuth or Clerk, depending on whether you want self-hosted vs managed auth
+- Auth: NextAuth with local owner credentials and optional Google/GitHub OAuth
 - File/object storage: S3-compatible storage
 - Observability: OpenTelemetry, Grafana, Loki
 - Agent runtime: TypeScript SDK with pluggable providers and tool adapters

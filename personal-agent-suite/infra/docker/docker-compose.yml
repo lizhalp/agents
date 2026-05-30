@@ -13,7 +13,6 @@ services:
       - ../../.env
     environment:
       PUBLIC_BASE_URL: ${PUBLIC_BASE_URL}
-      AUTHENTIK_HOST: ${AUTHENTIK_HOST}
       ADMIN_USER: ${ADMIN_USER:-admin}
       ADMIN_PASSWORD_HASH: ${ADMIN_PASSWORD_HASH}
     ports:
@@ -40,12 +39,10 @@ services:
       AUTH_URL: https://${PUBLIC_BASE_URL}
       AUTH_TRUST_HOST: "true"
     depends_on:
-      authentik-bootstrap:
-        condition: service_completed_successfully
       api:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/health/live').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 15s
       timeout: 5s
       retries: 10
@@ -66,8 +63,6 @@ services:
       TEMPORAL_HOST: temporal
       MINIO_HOST: minio
     depends_on:
-      authentik-bootstrap:
-        condition: service_completed_successfully
       postgres:
         condition: service_healthy
       redis:
@@ -77,7 +72,7 @@ services:
       minio:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4000/health/live').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4000/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 15s
       timeout: 5s
       retries: 10
@@ -181,99 +176,6 @@ services:
     networks:
       - platform
 
-  authentik-postgres:
-    image: postgres:16-alpine
-    restart: unless-stopped
-    environment:
-      POSTGRES_DB: ${AUTHENTIK_POSTGRES_DB}
-      POSTGRES_USER: ${AUTHENTIK_POSTGRES_USER}
-      POSTGRES_PASSWORD: ${AUTHENTIK_POSTGRES_PASSWORD}
-    volumes:
-      - authentik_postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${AUTHENTIK_POSTGRES_USER} -d ${AUTHENTIK_POSTGRES_DB}"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-    networks:
-      - platform
-
-  authentik-redis:
-    image: redis:7.4-alpine
-    restart: unless-stopped
-    command: ["redis-server", "--save", "60", "1", "--loglevel", "warning"]
-    volumes:
-      - authentik_redis_data:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 3s
-      retries: 10
-    networks:
-      - platform
-
-  authentik-server:
-    image: ghcr.io/goauthentik/server:2025.8.3
-    restart: unless-stopped
-    env_file:
-      - ../../.env
-    environment:
-      AUTHENTIK_SECRET_KEY: ${AUTH_SECRET}
-      AUTHENTIK_REDIS__HOST: authentik-redis
-      AUTHENTIK_POSTGRESQL__HOST: authentik-postgres
-      AUTHENTIK_POSTGRESQL__NAME: ${AUTHENTIK_POSTGRES_DB}
-      AUTHENTIK_POSTGRESQL__USER: ${AUTHENTIK_POSTGRES_USER}
-      AUTHENTIK_POSTGRESQL__PASSWORD: ${AUTHENTIK_POSTGRES_PASSWORD}
-      AUTHENTIK_BOOTSTRAP_PASSWORD: ${AUTHENTIK_BOOTSTRAP_PASSWORD}
-      AUTHENTIK_BOOTSTRAP_TOKEN: ${AUTHENTIK_BOOTSTRAP_TOKEN}
-      AUTHENTIK_BOOTSTRAP_EMAIL: ${AUTHENTIK_BOOTSTRAP_EMAIL}
-    command: server
-    depends_on:
-      authentik-postgres:
-        condition: service_healthy
-      authentik-redis:
-        condition: service_healthy
-    networks:
-      - platform
-
-  authentik-worker:
-    image: ghcr.io/goauthentik/server:2025.8.3
-    restart: unless-stopped
-    env_file:
-      - ../../.env
-    environment:
-      AUTHENTIK_SECRET_KEY: ${AUTH_SECRET}
-      AUTHENTIK_REDIS__HOST: authentik-redis
-      AUTHENTIK_POSTGRESQL__HOST: authentik-postgres
-      AUTHENTIK_POSTGRESQL__NAME: ${AUTHENTIK_POSTGRES_DB}
-      AUTHENTIK_POSTGRESQL__USER: ${AUTHENTIK_POSTGRES_USER}
-      AUTHENTIK_POSTGRESQL__PASSWORD: ${AUTHENTIK_POSTGRES_PASSWORD}
-      AUTHENTIK_BOOTSTRAP_PASSWORD: ${AUTHENTIK_BOOTSTRAP_PASSWORD}
-      AUTHENTIK_BOOTSTRAP_TOKEN: ${AUTHENTIK_BOOTSTRAP_TOKEN}
-      AUTHENTIK_BOOTSTRAP_EMAIL: ${AUTHENTIK_BOOTSTRAP_EMAIL}
-    command: worker
-    depends_on:
-      authentik-server:
-        condition: service_started
-    networks:
-      - platform
-
-  authentik-bootstrap:
-    image: node:22-bookworm-slim
-    restart: "no"
-    env_file:
-      - ../../.env
-    environment:
-      AUTHENTIK_INTERNAL_SERVICE_URL: http://authentik-server:9000
-    command: ["node", "/bootstrap/bootstrap-authentik.mjs"]
-    volumes:
-      - ../../scripts/bootstrap-authentik.mjs:/bootstrap/bootstrap-authentik.mjs:ro
-    depends_on:
-      authentik-server:
-        condition: service_started
-    networks:
-      - platform
-
   prometheus:
     image: prom/prometheus:v3.3.1
     restart: unless-stopped
@@ -335,8 +237,6 @@ volumes:
   caddy_config:
   postgres_data:
   redis_data:
-  authentik_postgres_data:
-  authentik_redis_data:
   minio_data:
   grafana_data:
   prometheus_data:

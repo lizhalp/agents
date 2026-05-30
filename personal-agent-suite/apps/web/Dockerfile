@@ -3,11 +3,11 @@ RUN corepack enable
 WORKDIR /app
 
 FROM base AS deps
-COPY package.json pnpm-workspace.yaml turbo.json tsconfig.base.json ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json tsconfig.base.json ./
 COPY apps/web/package.json apps/web/package.json
 COPY packages/config/package.json packages/config/package.json
 COPY packages/shared-types/package.json packages/shared-types/package.json
-RUN pnpm install --filter @agent-suite/web... --frozen-lockfile=false
+RUN pnpm install --filter @agent-suite/web... --frozen-lockfile
 
 FROM deps AS build
 COPY . .

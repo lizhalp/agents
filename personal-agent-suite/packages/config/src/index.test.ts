@@ -8,7 +8,7 @@ describe("loadEnv", () => {
 
     expect(env.NODE_ENV).toBe("development");
     expect(env.PUBLIC_BASE_URL).toBe("localhost");
-    expect(env.AUTHENTIK_CLIENT_ID).toBe("personal-agent-suite");
+    expect(env.AUTH_LOCAL_USERNAME).toBe("akadmin");
     expect(env.POSTGRES_PORT).toBe(5432);
     expect(env.TEMPORAL_TASK_QUEUE).toBe("platform-smoke");
   });
@@ -37,9 +37,7 @@ describe("buildServiceUrls", () => {
       POSTGRES_USER: "suite",
       POSTGRES_PASSWORD: "secret",
       POSTGRES_DB: "suite_db",
-      AUTHENTIK_APP_SLUG: "operator-suite",
-      AUTHENTIK_BASE_URL: "https://agents.example.com/auth",
-      AUTHENTIK_INTERNAL_SERVICE_URL: "http://authentik-server:9000"
+      API_BASE_URL: "http://api.internal:4400"
     });
 
     const urls = buildServiceUrls(env);
@@ -47,10 +45,7 @@ describe("buildServiceUrls", () => {
     expect(urls.postgresUrl).toBe("postgresql://suite:secret@postgres:5432/suite_db");
     expect(urls.redisUrl).toBe("redis://redis:6379");
     expect(urls.temporalAddress).toBe("temporal:7233");
-    expect(urls.authentikAuthorizeUrl).toBe("https://agents.example.com/auth/application/o/authorize/");
-    expect(urls.authentikDiscoveryUrl).toBe(
-      "http://authentik-server:9000/application/o/operator-suite/.well-known/openid-configuration"
-    );
+    expect(urls.apiBaseUrl).toBe("http://api.internal:4400");
   });
 
   it("respects explicit host overrides from process environment", () => {

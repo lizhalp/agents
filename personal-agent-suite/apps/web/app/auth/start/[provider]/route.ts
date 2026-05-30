@@ -1,6 +1,6 @@
 import { signIn } from "../../../../auth";
 
-const supportedProviders = new Set(["authentik", "google", "github"]);
+const supportedProviders = new Set(["google", "github"]);
 
 type StartAuthRouteContext = {
   params: Promise<{
