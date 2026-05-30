@@ -19,17 +19,17 @@ describe("requireInternalSystemAuth", () => {
       error: "unauthorized",
       message: "missing or invalid internal api secret"
     });
+  });
 
-    it("rejects requests with non-matching secret lengths", async () => {
-      const reply = createReply();
+  it("rejects requests with non-matching secret lengths", async () => {
+    const reply = createReply();
 
-      await requireInternalSystemAuth(createRequest("short"), reply);
+    await requireInternalSystemAuth(createRequest("short"), reply);
 
-      expect(reply.statusCode).toBe(401);
-      expect(reply.payload).toEqual({
-        error: "unauthorized",
-        message: "missing or invalid internal api secret"
-      });
+    expect(reply.statusCode).toBe(401);
+    expect(reply.payload).toEqual({
+      error: "unauthorized",
+      message: "missing or invalid internal api secret"
     });
   });
 

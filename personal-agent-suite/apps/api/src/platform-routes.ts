@@ -22,12 +22,18 @@ type BodySchema<T> = {
   safeParse: (body: unknown) => { success: true; data: T } | { success: false; error: { issues: { message: string }[] } };
 };
 
+type RouteRegistrar = {
+  get: FastifyInstance["get"];
+  patch: FastifyInstance["patch"];
+  post: FastifyInstance["post"];
+};
+
 /**
  * Registers the documented Phase 1 control-plane routes.
  *
  * @param app The Fastify instance receiving route registrations.
  */
-export function registerPlatformRoutes(app: FastifyInstance) {
+export function registerPlatformRoutes(app: RouteRegistrar) {
   app.get("/api/platform", { preHandler: requireInternalSystemAuth }, async () => getPlatformSnapshot());
 
   app.post("/api/goals", { preHandler: requireInternalSystemAuth }, async (request: FastifyRequest, reply: FastifyReply) => {

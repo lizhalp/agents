@@ -1,7 +1,6 @@
 import { buildServiceUrls, loadEnv } from "@agent-suite/config";
 import { statusResponseSchema } from "@agent-suite/shared-types";
 import Fastify from "fastify";
-import pino from "pino";
 
 
 import { requireInternalSystemAuth } from "./auth.js";
@@ -20,13 +19,11 @@ export function buildApp() {
   const env = loadEnv();
   const urls = buildServiceUrls(env);
 
-  const logger = pino({
-    level: "info",
-    transport: process.env.NODE_ENV === "production" ? undefined : { target: "pino-pretty" }
-  });
-
   const app = Fastify({
-    loggerInstance: logger,
+    logger: {
+      level: "info",
+      transport: process.env.NODE_ENV === "production" ? undefined : { target: "pino-pretty" }
+    },
     genReqId: () => crypto.randomUUID()
   });
 
