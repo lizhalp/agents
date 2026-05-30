@@ -61,7 +61,7 @@ function unavailableNotice(apiUnavailable: boolean) {
 export default async function HomePage({
   searchParams
 }: {
-  searchParams?: Record<string, string | string[] | undefined>;
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const session = await auth();
   if (!session?.user) {
@@ -74,7 +74,7 @@ export default async function HomePage({
   const pendingApprovals = snapshot.approvals.filter((approval) => approval.status === "pending");
   const latestRun = snapshot.runs[0];
   const notice = unavailableNotice(apiUnavailable);
-  const formError = parseFormError(searchParams);
+  const formError = parseFormError(await searchParams);
 
   return (
     <main className="min-h-screen px-5 py-6 text-[#f2ebdf] lg:px-8">
