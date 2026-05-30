@@ -232,7 +232,7 @@ jobs:
 
       - name: Assert anonymous API is denied
         run: |
-          status=$(curl -s -o /dev/null -w "%{http_code}" http://localhost/api/status)
+          status=$(curl -ks -o /dev/null -w "%{http_code}" https://localhost/api/status)
           test "$status" = "401"
 
       - name: Assert Temporal smoke path

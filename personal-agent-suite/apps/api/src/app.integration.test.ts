@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
+import type { buildApp } from "./app.js";
 import type { Pool } from "pg";
 
 vi.mock("./dependencies.js", () => ({
@@ -15,7 +16,7 @@ vi.mock("./smoke.js", () => ({
   runTemporalSmokeCheck: vi.fn(async () => ({ ok: true, message: "workflow result=hello-world:ack" }))
 }));
 
-let app: ReturnType<(typeof import("./app.js"))["buildApp"]>;
+let app: ReturnType<typeof buildApp>;
 let pool: Pool;
 
 describe("api integration", () => {

@@ -5,6 +5,8 @@
   "packageManager": "pnpm@10.12.1",
   "scripts": {
     "build": "turbo build",
+    "ci:local": "bash scripts/local-ci.sh",
+    "ci:local:full": "bash scripts/local-ci.sh --full",
     "dev": "turbo dev",
     "lint": "eslint . --max-warnings=0",
     "lint:fix": "eslint . --fix",
